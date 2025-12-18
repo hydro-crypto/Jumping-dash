@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Geometry Dash Ultimate</title>
+<style>
+  body {
+    margin:0;
+    font-family: 'Poppins', sans-serif;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+    overflow:hidden;
+    background: linear-gradient(120deg, #1a2a6c, #b21f1f, #fdbb2d);
+    transition: background 2s ease;
+  }
+  #gameArea {
+    position:relative;
+    width:90%;
+    max-width:600px;
+    height:400px;
+    background:#111;
+    overflow:hidden;
+    border-radius:12px;
+    box-shadow:0 0 30px rgba(0,0,0,0.6);
+  }
+  #player {
+    position:absolute;
+    bottom:50px;
+    left:60px;
+    width:50px;
+    height:50px;
+    background:#ff7;
+    border-radius:8px;
+    box-shadow:0 0 15px #ff7;
+  }
+  .obstacle {
+    position:absolute;
+    bottom:30px;
+    width:40px;
+    background:#4caf50;
+    border-radius:5px;
+  }
+  .trail {
+    position:absolute;
+    width:20px;
+    height:20px;
+    border-radius:50%;
+    opacity:0.5;
+    pointer-events:none;
+  }
+  #scoreBoard {
+    position:absolute;
+    top:10px;
+    left:10px;
+    color:#fff;
+    font-size:1.4em;
+    font-weight:bold;
+  }
+  #startScreen {
+    position:absolute;
+    top:0;left:0;width:100%;height:100%;
+    background:rgba(0,0,0,0.8);
+    color:white;
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    z-index:50;
+  }
+  #startBtn {
+    margin-top:20px;
+    padding:15px 35px;
+    background:#ff7f50;
+    border:none;
+    border-radius:10px;
+    color:white;
+    font-size:1.5em;
+    cursor:pointer;
+  }
+  #restartBtn {
+    position:absolute;
+    top:50%;left:50%;
+    transform:translate(-50%,-50%);
+    padding:15px 30px;
+    font-size:1.4em;
+    background:#ff7f50;
+    color:white;
+    border:none;
+    border-radius:10px;
+    display:none;
+    cursor:pointer;
+  }
+</style>
+</head>
+<body>
+
+<div id="gameArea">
+  <div id="player"></div>
+  <div id="scoreBoard">Score: 0</div>
+  <div id="startScreen">
+    <h1>⚡ Geometry Dash Ultimate ⚡</h1>
+    <p>Tap screen or press SPACE to jump!</p>
+    <p>Collect ⭐ Powerups to gain score & color boost.</p>
+    <button id="startBtn">Start Game</button>
+  </div>
+  <button id="restartBtn">Restart</button>
+</div>
+
+<audio id="bgMusic" src="https://cdn.pixabay.com/download/audio/2022/10/25/audio_1b3efbdcf8.mp3?filename=arcade-loop-117077.mp3" loop></audio>
+<audio id="jumpSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_9e0dc30e08.mp3?filename=jump-coin-146334.mp3"></audio>
+<audio id="hitSound" src="https://cdn.pixabay.com/download/audio/2021/09/01/audio_5d6a93d681.mp3?filename=wrong-buzzer-6268.mp3"></audio>
+
+<script>
+const player=document.getElementById('player'),
+      gameArea=document.getElementById('gameArea'),
+      startScreen=document.getElementById('startScreen'),
+      startBtn=document.getElementById('startBtn'),
+      restartBtn=document.getElementById('restartBtn'),
+      scoreBoard=document.getElementById('scoreBoard'),
+      bgMusic=document.getElementById('bgMusic'),
+      jumpSound=document.getElementById('jumpSound'),
+      hitSound=document.getElementById('hitSound');
+
+let playerY=50,isJumping=false,gravity=4,obstacles=[],score=0,speed=4,gameOver=false;
+let started=false;
+
+function changeBackground(){
+  const colors=[
+    'linear-gradient(120deg,#1a2a6c,#b21f1f,#fdbb2d)',
+    'linear-gradient(120deg,#667eea,#764ba2)',
+    'linear-gradient(120deg,#ff9966,#ff5e62)',
+    'linear-gradient(120deg,#00c6ff,#0072ff)'
+  ];
+  document.body.style.background=colors[Math.floor(score/10)%colors.length];
+}
+
+function createTrail(){
+  const t=document.createElement('div');
+  t.classList.add('trail');
+  t.style.background=player.style.background;
+  t.style.left=player.offsetLeft+'px';
+  t.style.bottom=player.style.bottom;
+  gameArea.appendChild(t);
+  setTimeout(()=>t.remove(),300);
+}
+
+function jump(){
+  if(isJumping || gameOver || !started) return;
+  isJumping=true;
+  jumpSound.play();
+  let jumpCount=0,jumpHeight=120;
+  let j=setInterval(()=>{
+    if(jumpCount<jumpHeight/5){playerY+=5;player.style.bottom=playerY+'px';createTrail();jumpCount++;}
+    else{clearInterval(j);
+      let f=setInterval(()=>{
+        if(playerY>50){playerY-=gravity;player.style.bottom=playerY+'px';createTrail();}
+        else{playerY=50;player.style.bottom=playerY+'px';isJumping=false;clearInterval(f);}
+      },20);
+    }
+  },20);
+}
+
+function createObstacle(){
+  if(gameOver || !started) return;
+  const obs=document.createElement('div');
+  obs.classList.add('obstacle');
+  obs.style.height=(Math.random()*60+40)+'px';
+  obs.style.left=gameArea.offsetWidth+'px';
+  gameArea.appendChild(obs);
+  obstacles.push({elem:obs,x:gameArea.offsetWidth});
+}
+
+function gameLoop(){
+  if(gameOver || !started) return;
+  obstacles.forEach((ob,index)=>{
+    ob.x-=speed; ob.elem.style.left=ob.x+'px';
+    let p=player.getBoundingClientRect(), o=ob.elem.getBoundingClientRect();
+    if(p.right>o.left && p.left<o.right && p.bottom>o.top && p.top<o.bottom){ endGame(); }
+    if(ob.x+50<0){ob.elem.remove(); obstacles.splice(index,1); score++; scoreBoard.textContent="Score: "+score; if(score%10===0){speed+=0.5; changeBackground();}}
+  });
+  requestAnimationFrame(gameLoop);
+}
+
+function endGame(){
+  gameOver=true; hitSound.play(); restartBtn.style.display='block';
+  bgMusic.pause(); player.style.background='#555'; player.style.boxShadow='none';
+}
+
+restartBtn.onclick=()=>location.reload();
+
+startBtn.onclick=()=>{
+  startScreen.style.display='none'; started=true;
+  bgMusic.volume=0.4; bgMusic.play();
+  setInterval(createObstacle,2000);
+  gameLoop();
+};
+
+document.addEventListener('keydown',e=>{if(e.code==='Space')jump();});
+document.addEventListener('touchstart',jump);
+</script>
+</body>
+</html># Simple workflow for deploying static content to GitHub Pages
+name: Deploy static content to Pages
+
+on:
+  # Runs on pushes targeting the default branch
+  push:
+    branches: ["main"]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow only one concurrent deployment, skipping runs queued between the run in-progress and latest queued.
+# However, do NOT cancel in-progress runs as we want to allow these production deployments to complete.
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
+
+jobs:
+  # Single deploy job since we're just deploying
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Upload entire repository
+          path: '.'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
